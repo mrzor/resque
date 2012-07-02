@@ -52,6 +52,22 @@ describe "Resque::Job before_perform" do
     assert_equal false, result, "perform returned false"
     assert_equal history, [:before_perform], "Only before_perform was run"
   end
+
+  class ::BeforePerformJobChangeArgs
+    def self.before_perform_modify_args(*args)
+      args.first << :before_perform
+      raise Resque::Job::ChangeArgs.new(args.push(:extra_argument))
+    end
+    def self.perform(h, *args)
+      h << :perform
+      h << args.last
+    end
+  end
+
+  it "does change the args if before_perform raises Resque::Job::ChangeArgs" do
+    result = perform_job(BeforePerformJobChangeArgs, history=[], :arg1, :arg2)
+    assert_equal history, [:before_perform, :perform, :extra_argument], "Arguments changed when perform ran"
+  end
 end
 
 describe "Resque::Job after_perform" do
@@ -287,6 +303,34 @@ describe "Resque::Job before_enqueue" do
     @worker = Resque::Worker.new(:jobs)
     assert_nil Resque.enqueue(BeforeEnqueueJobAbort, history)
     assert_equal 0, Resque.size(:jobs)
+  end
+
+  class ::BeforeEnqueueChangeArgs
+    class << self
+      attr_accessor :perform_history
+    end
+
+    @queue = :jobs
+    def self.before_enqueue_change_args(*args)
+      args.first << "before_enqueue"
+      args.push(:appended_argument)
+      raise Resque::Job::ChangeArgs.new(args)
+    end
+
+    def self.perform(history, *args)
+      history << "perform"
+      history << args.last
+      self.perform_history = history
+    end
+  end
+
+  it "does change the args if before_enqueue raises Resque::Job::ChangeArgs" do
+    history = []
+    @worker = Resque::Worker.new(:jobs)
+    assert Resque.enqueue(BeforeEnqueueChangeArgs, history, :arg1, :arg2)
+    assert_equal history, ["before_enqueue"], "before_enqueue ran"
+    @worker.work(0)
+    assert_equal BeforeEnqueueChangeArgs.perform_history, %w[before_enqueue perform appended_argument], "arguments were changed when perform ran"
   end
 end
 

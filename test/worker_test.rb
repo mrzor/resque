@@ -9,6 +9,15 @@ describe "Resque::Worker" do
     Resque::Job.create(:jobs, SomeJob, 20, '/tmp')
   end
 
+  after do
+    Resque.before_first_fork = nil
+    Resque.before_fork = nil
+    Resque.after_fork = nil
+
+    Resque.before_pause = nil
+    Resque.after_pause = nil
+  end
+
   it "can fail jobs" do
     Resque::Job.create(:jobs, BadJob)
     @worker.work(0)

@@ -19,6 +19,15 @@ module Resque
     # abort the job.
     DontPerform = Class.new(StandardError)
 
+    # Raise Resque::Job::ChangeParameters from a before_perform or
+    # a before_enqueue hook to change the job parameters
+    class ChangeArgs < Exception
+      attr_accessor :new_args
+      def initialize new_args
+        @new_args = new_args
+      end
+    end
+
     # The worker object which is currently processing this job.
     attr_accessor :worker
 
@@ -111,10 +120,15 @@ module Resque
 
       begin
         # Execute before_perform hook. Abort the job gracefully if
-        # Resque::Job::DontPerform is raised.
+        # Resque::Job::DontPerform is raised. Changes the job args if
+        # Resque::Job::ChangeArgs is raised.
         begin
           before_hooks.each do |hook|
-            job.send(hook, *job_args)
+            begin
+              job.send(hook, *job_args)
+            rescue ChangeArgs => change_args_exception
+              job_args = change_args_exception.new_args
+            end
           end
         rescue DontPerform
           return false

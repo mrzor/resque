@@ -277,7 +277,11 @@ module Resque
     validate(klass, queue)
     # Perform before_enqueue hooks. Don't perform enqueue if any hook returns false
     before_hooks = Plugin.before_enqueue_hooks(klass).collect do |hook|
-      klass.send(hook, *args)
+      begin
+        klass.send(hook, *args)
+      rescue Job::ChangeArgs => change_args_exception
+        args = change_args_exception.new_args
+      end
     end
     return nil if before_hooks.any? { |result| result == false }
 
